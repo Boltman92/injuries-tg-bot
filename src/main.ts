@@ -11,7 +11,8 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableShutdownHooks();
 
-  await app.listen(process.env.PORT || 3001);
-  console.log(`LISTENING ON PORT ${process.env.PORT || 3001}`);
+  const port = process.env.PORT || 3001;
+  await app.listen(port, '0.0.0.0');
+  console.log(`LISTENING ON PORT ${port}`);
 }
 void bootstrap();
