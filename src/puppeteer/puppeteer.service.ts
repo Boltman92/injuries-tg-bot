@@ -22,8 +22,9 @@ export class PuppeteerService
     if (!this.browser) {
       this.logger.log('Launching Puppeteer...');
       this.browser = await puppeteer.launch({
-        headless: true,
+        executablePath: '/usr/bin/chromium',
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        headless: true,
       });
     }
     return this.browser;
