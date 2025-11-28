@@ -47,30 +47,43 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     });
 
     this.bot.on('message', async (ctx: any) => {
-      const player = await this.playersService.findPlayer(
-        ctx?.message?.text as string,
-      );
-      if (!player) {
-        return ctx.reply(`player not found`);
+      const text = ctx?.message?.text as string;
+      const playersNames = text.split('\n');
+      const notFoundPlayers: string[] = [];
+      for (const playerName of playersNames) {
+        const player = await this.playersService.findPlayer(playerName);
+        if (!player) {
+          notFoundPlayers.push(playerName);
+          continue;
+        }
+
+        if (!ctx.update?.message?.from?.is_bot) {
+          // TODO: check if user already exists and save only after
+          //save user
+          const name: string = ctx?.update?.message?.from?.username as string;
+          const telegramId: string =
+            ctx?.update?.message?.from?.id.toString() as string;
+
+          const user = await this.userService.findUser(telegramId);
+
+          const userEntity =
+            user || (await this.userService.createUser(name, telegramId));
+
+          await this.playersService.savePlayer(userEntity, player);
+        }
       }
 
-      if (!ctx.update?.message?.from?.is_bot) {
-        // TODO: check if user already exists and save only after
-        //save user
-        const name: string = ctx?.update?.message?.from?.username as string;
-        const telegramId: string =
-          ctx?.update?.message?.from?.id.toString() as string;
+      const playerList = playersNames
+        .filter((playerName) => !notFoundPlayers.includes(playerName))
+        .map((playerName) => `<b>${playerName}</b>`)
+        .join('\n');
 
-        const user = await this.userService.findUser(telegramId);
-
-        const userEntity =
-          user || (await this.userService.createUser(name, telegramId));
-
-        await this.playersService.savePlayer(userEntity, player);
+      if (playerList.length === 0) {
+        return ctx.reply('no players found');
       }
 
       return ctx.reply(
-        `thanks, i will start tracking injuries for ${player?.name} from ${player?.primaryTeam.teamName}`,
+        `thanks, i will start tracking injuries for ${playerList}`,
       );
     });
 
