@@ -33,7 +33,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     this.bot = new Telegraf<Context>(token);
   }
 
-  async onApplicationBootstrap(): Promise<void> {
+  onApplicationBootstrap(): void {
     console.log('🤖 Initializing Telegram bot...');
 
     this.bot.start((ctx: Context) => {
@@ -87,7 +87,9 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
       );
     });
 
-    await this.bot.launch();
+    // Don't await - bot.launch() is a long-running process that polls for updates
+    // Awaiting it would block the application startup
+    void this.bot.launch();
 
     console.log('🤖 Telegram bot is running...');
   }
