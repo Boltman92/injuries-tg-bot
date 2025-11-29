@@ -84,6 +84,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
 
       return ctx.reply(
         `thanks, i will start tracking injuries for ${playerList}`,
+        { parse_mode: 'HTML' },
       );
     });
 
