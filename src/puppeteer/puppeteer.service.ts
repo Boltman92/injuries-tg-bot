@@ -5,7 +5,7 @@ import {
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
-import puppeteer, { Browser } from 'puppeteer';
+import puppeteer, { Browser, Page, HTTPRequest } from 'puppeteer';
 import { Cron, CronExpression, SchedulerRegistry } from '@nestjs/schedule';
 
 @Injectable()
@@ -32,31 +32,52 @@ export class PuppeteerService
 
   @Cron(CronExpression.EVERY_2_HOURS)
   async getXmasToken() {
+    let page: Page | null = null;
     try {
       this.logger.log('Getting x-mas token...');
       const browser = await this.getBrowser();
-      const page = await browser.newPage();
+      page = await browser.newPage();
 
-      page.on('request', (req) => {
+      const requestHandler = (req: HTTPRequest) => {
         if (req.url().includes('allLeagues')) {
           console.log('Headers:', req.headers()['x-mas']);
-          this.xMasToken = req.headers()['x-mas'];
+          this.xMasToken = req.headers()['x-mas'] as string | null;
         }
-      });
+      };
+
+      page.on('request', requestHandler);
 
       await page.goto('https://www.fotmob.com', { waitUntil: 'networkidle2' });
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
+      // Remove event listener before closing to prevent memory leak
+      page.off('request', requestHandler);
       await page.close();
     } catch (error) {
       this.logger.error('Error getting x-mas token:', error);
+      // Ensure page is closed even on error
+      if (page && !page.isClosed()) {
+        try {
+          await page.close();
+        } catch (closeError) {
+          this.logger.error('Error closing page:', closeError);
+        }
+      }
     }
   }
 
   async onModuleDestroy() {
     if (this.browser) {
       this.logger.log('Closing Puppeteer browser...');
-      await this.browser.close();
+      try {
+        // Close all pages before closing browser
+        const pages = await this.browser.pages();
+        await Promise.all(pages.map((page) => page.close().catch(() => {})));
+        await this.browser.close();
+        this.browser = null;
+      } catch (error) {
+        this.logger.error('Error closing Puppeteer browser:', error);
+      }
     }
   }
 

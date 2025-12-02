@@ -19,6 +19,7 @@ export class UsersService {
     return this.userRepository.findOne({ where: { telegramId } });
   }
 
+  // TODO: add pagination support
   async findAllUsersWithPlayersByLeagueId(leagueId: number) {
     return this.userRepository.find({
       where: {
@@ -30,6 +31,7 @@ export class UsersService {
         },
       },
       relations: ['players'],
+      take: 500,
     });
   }
 }

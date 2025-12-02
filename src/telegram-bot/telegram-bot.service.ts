@@ -19,6 +19,7 @@ import { Fixture } from '../fixtures/entity/Fixture';
 export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
   private bot: Telegraf<Context>;
   private readonly logger = new Logger(BotService.name);
+  private messageHandler: ((ctx: any) => Promise<void>) | null = null;
   constructor(
     private configService: ConfigService,
     private playersService: PlayersService,
@@ -46,7 +47,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
       return ctx.reply('for start tracking injuries, just send me player name');
     });
 
-    this.bot.on('message', async (ctx: any) => {
+    this.messageHandler = async (ctx: any) => {
       const text = ctx?.message?.text as string;
       const playersNames = text.split('\n');
       const notFoundPlayers: string[] = [];
@@ -86,7 +87,8 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
         `thanks, i will start tracking injuries for ${playerList}`,
         { parse_mode: 'HTML' },
       );
-    });
+    };
+    this.bot.on('message', this.messageHandler);
 
     // Don't await - bot.launch() is a long-running process that polls for updates
     // Awaiting it would block the application startup
@@ -129,6 +131,11 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
 
   onModuleDestroy(): void {
     console.log('🤖 Telegram bot is stopping...');
-    this.bot.stop();
+    try {
+      this.bot.stop();
+      this.messageHandler = null;
+    } catch (error) {
+      this.logger.error('Error stopping Telegram bot:', error);
+    }
   }
 }
