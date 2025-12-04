@@ -88,7 +88,12 @@ export class PlayersService {
   }
 
   async savePlayer(user: User, playerInfo: PlayerResponse) {
-    const { id: fotmobId, name: fullName, mainLeague } = playerInfo;
+    const {
+      id: fotmobId,
+      name: fullName,
+      mainLeague,
+      injuryInformation,
+    } = playerInfo;
     const { teamName, teamId } = playerInfo.primaryTeam;
     //const { leagueId, leagueName } = playerInfo.mainLeague;
     const existedPlayer = await this.findPlayerInDB(fotmobId.toString());
@@ -121,6 +126,9 @@ export class PlayersService {
       teamId: teamId.toString(),
       users: [user],
       league,
+      injuryStatus: injuryInformation?.name ?? '',
+      expectedReturn:
+        injuryInformation?.expectedReturn?.expectedReturnFallback ?? '',
     });
   }
 
