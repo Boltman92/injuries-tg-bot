@@ -22,7 +22,8 @@ export class UsersService {
   async findUserWithPlayers(telegramId: string) {
     return this.userRepository.findOne({
       where: { telegramId },
-      relations: ['players'],
+      order: { players: { league: { id: 'ASC' } } },
+      relations: ['players', 'players.league'],
     });
   }
 

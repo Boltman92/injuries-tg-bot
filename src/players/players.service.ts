@@ -2,7 +2,7 @@
 import { Injectable } from '@nestjs/common';
 import { Player } from './entity/Player';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Like, Repository } from 'typeorm';
 import { PlayerResponse, SuggestionResponse } from './players.interfaces';
 import { User } from '../users/entity/User';
 import { PuppeteerService } from '../puppeteer/puppeteer.service';
@@ -75,6 +75,20 @@ export class PlayersService {
     }
   }
 
+  public async findPlayerInDBorFotmob(
+    name: string,
+  ): Promise<PlayerResponse | Player | null> {
+    const playersFromDB = await this.findPlayerInDBByName(name);
+    if (playersFromDB.length === 1) {
+      return playersFromDB[0];
+    }
+    const player = await this.findPlayer(name);
+    if (player) {
+      return player;
+    }
+    return null;
+  }
+
   private getSearchPlayerUrl(name: string): string {
     return `https://www.fotmob.com/api/data/search/suggest?hits=50&lang=en&term=${name}`;
   }
@@ -87,7 +101,17 @@ export class PlayersService {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  async savePlayer(user: User, playerInfo: PlayerResponse) {
+  async savePlayer(user: User, playerInfo: PlayerResponse | Player) {
+    if (playerInfo instanceof Player) {
+      const userAlreadyExists = playerInfo.users.find(
+        (u) => u.telegramId === user.telegramId,
+      );
+      if (userAlreadyExists) {
+        return;
+      }
+      playerInfo.users.push(user);
+      return this.playerRepository.save(playerInfo);
+    }
     const {
       id: fotmobId,
       name: fullName,
@@ -129,6 +153,15 @@ export class PlayersService {
       injuryStatus: injuryInformation?.name ?? '',
       expectedReturn:
         injuryInformation?.expectedReturn?.expectedReturnFallback ?? '',
+    });
+  }
+
+  async findPlayerInDBByName(name: string) {
+    const capitalizedName =
+      name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+    return this.playerRepository.find({
+      where: { fullName: Like(`%${capitalizedName}%`) },
+      relations: ['users'],
     });
   }
 

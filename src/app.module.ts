@@ -29,9 +29,13 @@ import { PuppeteerModule } from './puppeteer/puppeteer.module';
 })
 export class AppModule implements OnModuleDestroy {
   async onModuleDestroy() {
-    if (AppDataSource.isInitialized) {
-      await AppDataSource.destroy();
-      console.log('Database connection closed');
+    try {
+      if (AppDataSource.isInitialized) {
+        await AppDataSource.destroy();
+        console.log('Database connection closed');
+      }
+    } catch (error) {
+      console.error('Error closing database connection:', error);
     }
   }
 }

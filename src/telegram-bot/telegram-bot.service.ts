@@ -11,6 +11,8 @@ import { Telegraf } from 'telegraf';
 import type { Context } from 'telegraf';
 import { Fixture } from '../fixtures/entity/Fixture';
 import { Message } from 'telegraf/types';
+import { Player } from '../players/entity/Player';
+import { FlagEmojiByLeagueId } from './constants';
 
 @Injectable()
 export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -59,7 +61,10 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
         return ctx.reply('you are not logged in, please start the bot first');
       }
       const playerList = userEntity.players
-        .map((player) => `<b>${player.fullName}</b>`)
+        .map(
+          (player, index) =>
+            `<b>${index + 1}. ${FlagEmojiByLeagueId[player.league?.id ?? 0] ?? ''} ${player.fullName}</b>`,
+        )
         .join('\n');
       return ctx.reply(
         `your team is: \n${playerList} \n \nto stop tracking injuries for a player, send 'delete {playerName}'`,
@@ -100,8 +105,10 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
       }
       const playersNames = text.split('\n');
       const notFoundPlayers: string[] = [];
+      const foundedPlayers: Player[] = [];
       for (const playerName of playersNames) {
-        const player = await this.playersService.findPlayer(playerName);
+        const player =
+          await this.playersService.findPlayerInDBorFotmob(playerName);
         if (!player) {
           notFoundPlayers.push(playerName);
           continue;
@@ -116,18 +123,28 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
             telegramId,
           );
 
-          await this.playersService.savePlayer(user, player);
+          const savedPlayer = await this.playersService.savePlayer(
+            user,
+            player,
+          );
+          if (savedPlayer) {
+            foundedPlayers.push(savedPlayer);
+          }
         }
       }
 
-      const playerList = playersNames
-        .filter((playerName) => !notFoundPlayers.includes(playerName))
-        .map((playerName) => `<b>${playerName}</b>`)
-        .join('\n');
-
-      if (playerList.length === 0) {
+      if (foundedPlayers.length === 0) {
         return ctx.reply('no players found');
       }
+
+      this.logger.log(foundedPlayers);
+
+      const playerList = foundedPlayers
+        .map(
+          (player) =>
+            `<b>${player.fullName}</b> from ${FlagEmojiByLeagueId[player.league?.id ?? 0] ?? ''} ${player.teamName}`,
+        )
+        .join('\n');
 
       return ctx.reply(
         `thanks, i will start tracking injuries for: \n${playerList}`,
