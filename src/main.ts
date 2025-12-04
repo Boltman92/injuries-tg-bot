@@ -11,28 +11,6 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableShutdownHooks();
 
-  // Graceful shutdown handler for database cleanup
-  // Store handlers to prevent memory leaks from multiple registrations
-  const shutdownHandler = () => {
-    console.log('Shutdown signal received, closing database connection...');
-    void (async () => {
-      try {
-        if (AppDataSource.isInitialized) {
-          await AppDataSource.destroy();
-        }
-        await app.close();
-        process.exit(0);
-      } catch (error) {
-        console.error('Error during shutdown:', error);
-        process.exit(1);
-      }
-    })();
-  };
-
-  // Register handlers only once to prevent accumulation
-  process.once('SIGTERM', shutdownHandler);
-  process.once('SIGINT', shutdownHandler);
-
   const port = process.env.PORT || 3001;
   await app.listen(port, '0.0.0.0');
 

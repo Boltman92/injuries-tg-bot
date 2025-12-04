@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-
 import {
   Injectable,
   Logger,
@@ -14,12 +10,15 @@ import { UsersService } from '../users/users.service';
 import { Telegraf } from 'telegraf';
 import type { Context } from 'telegraf';
 import { Fixture } from '../fixtures/entity/Fixture';
+import { Message } from 'telegraf/types';
 
 @Injectable()
 export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
   private bot: Telegraf<Context>;
   private readonly logger = new Logger(BotService.name);
-  private messageHandler: ((ctx: any) => Promise<void>) | null = null;
+  private messageHandler: (ctx: Context) => Promise<Message.TextMessage>;
+  private myTeamHandler: (ctx: Context) => Promise<Message.TextMessage>;
+  private deletePlayerHandler: (ctx: Context) => Promise<Message.TextMessage>;
   constructor(
     private configService: ConfigService,
     private playersService: PlayersService,
@@ -44,11 +43,61 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     });
 
     this.bot.command('help', (ctx: Context) => {
-      return ctx.reply('for start tracking injuries, just send me player name');
+      return ctx.reply(
+        'for start tracking injuries, just send me player name. \n For check your team, use /myTeam command',
+      );
     });
+    this.myTeamHandler = async (ctx: Context) => {
+      const user = ctx.from;
+      if (!user) {
+        return ctx.reply('you are not logged in, please start the bot first');
+      }
+      const userEntity = await this.userService.findUserWithPlayers(
+        user.id.toString(),
+      );
+      if (!userEntity) {
+        return ctx.reply('you are not logged in, please start the bot first');
+      }
+      const playerList = userEntity.players
+        .map((player) => `<b>${player.fullName}</b>`)
+        .join('\n');
+      return ctx.reply(
+        `your team is: \n${playerList} \n \nto stop tracking injuries for a player, send 'delete {playerName}'`,
+        {
+          parse_mode: 'HTML',
+        },
+      );
+    };
+    this.bot.command('myTeam', this.myTeamHandler);
 
-    this.messageHandler = async (ctx: any) => {
-      const text = ctx?.message?.text as string;
+    this.deletePlayerHandler = async (ctx: Context) => {
+      try {
+        const text = ctx.text?.trim() ?? '';
+        if (!text) {
+          return ctx.reply('please provide player name');
+        }
+        const playerName = text.split(' ').slice(1).join(' ');
+
+        if (!ctx.from?.id) {
+          return ctx.reply('you are not logged in, please start the bot first');
+        }
+
+        await this.userService.deletePlayerForUser(
+          ctx.from.id.toString(),
+          playerName,
+        );
+        return ctx.reply(`player ${playerName} deleted`);
+      } catch (error) {
+        this.logger.error((error as Error).message);
+        return ctx.reply(`${(error as Error).message}`);
+      }
+    };
+
+    this.messageHandler = async (ctx: Context) => {
+      const text = ctx.text as string;
+      if (text.startsWith('delete')) {
+        return this.deletePlayerHandler(ctx);
+      }
       const playersNames = text.split('\n');
       const notFoundPlayers: string[] = [];
       for (const playerName of playersNames) {
@@ -58,19 +107,16 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
           continue;
         }
 
-        if (!ctx.update?.message?.from?.is_bot) {
-          // TODO: check if user already exists and save only after
-          //save user
-          const name: string = ctx?.update?.message?.from?.username as string;
-          const telegramId: string =
-            ctx?.update?.message?.from?.id.toString() as string;
+        if (!ctx.from?.is_bot) {
+          const name: string = ctx?.from?.username ?? '';
+          const telegramId: string = ctx?.from?.id.toString() ?? '';
 
-          const user = await this.userService.findUser(telegramId);
+          const user = await this.userService.findOrCreateUser(
+            name,
+            telegramId,
+          );
 
-          const userEntity =
-            user || (await this.userService.createUser(name, telegramId));
-
-          await this.playersService.savePlayer(userEntity, player);
+          await this.playersService.savePlayer(user, player);
         }
       }
 
@@ -84,7 +130,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
       }
 
       return ctx.reply(
-        `thanks, i will start tracking injuries for ${playerList}`,
+        `thanks, i will start tracking injuries for: \n${playerList}`,
         { parse_mode: 'HTML' },
       );
     };
@@ -133,7 +179,6 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     console.log('🤖 Telegram bot is stopping...');
     try {
       this.bot.stop();
-      this.messageHandler = null;
     } catch (error) {
       this.logger.error('Error stopping Telegram bot:', error);
     }

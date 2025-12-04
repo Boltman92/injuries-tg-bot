@@ -20,6 +20,8 @@ export class PlayersService {
     private readonly leaguesService: LeaguesService,
   ) {}
 
+  private readonly BATCH_SIZE = 100;
+
   public async findPlayer(name: string): Promise<PlayerResponse | null> {
     try {
       const url = this.getSearchPlayerUrl(name);
@@ -152,22 +154,56 @@ export class PlayersService {
   }
 
   @Cron(CronExpression.EVERY_6_HOURS)
-  async updatePlayersInjuries() {
-    const players = await this.playerRepository.find();
+  async updatePlayersInjuries(skip: number = 0) {
+    const players = await this.playerRepository.find({
+      take: this.BATCH_SIZE,
+      skip,
+    });
+
+    if (players.length === 0) {
+      this.logger.log('finished updating injuries');
+      return;
+    }
+
     this.logger.log(
-      `starting to update injuries for ${players.length} players`,
+      `starting to update injuries for ${players.length} players (skip: ${skip})`,
     );
+
+    let successCount = 0;
+    let errorCount = 0;
+
     for (const player of players) {
-      const injury = await this.checkPlayerInjuries(player);
-      // sleep for 10 seconds, for avoid rate limit
-      await this.sleep(1000 * 10);
-      if (injury) {
-        this.logger.log(`${player.fullName} has ${injury.injury}`);
+      try {
+        const injury = await this.checkPlayerInjuries(player);
+
+        if (injury) {
+          this.logger.log(`${player.fullName} has ${injury.injury}`);
+        }
+
         await this.playerRepository.update(player.id, {
-          injuryStatus: injury.injury,
-          expectedReturn: injury.expectedReturn,
+          injuryStatus: injury?.injury ?? '',
+          expectedReturn: injury?.expectedReturn ?? '',
         });
+
+        successCount++;
+      } catch (error) {
+        errorCount++;
+        this.logger.error(
+          `Error updating injury for player ${player.fullName} (ID: ${player.id}):`,
+          error,
+        );
       }
+      await this.sleep(1000 * 10);
+    }
+
+    this.logger.log(
+      `Batch complete: ${successCount} succeeded, ${errorCount} failed`,
+    );
+
+    if (players.length === this.BATCH_SIZE) {
+      await this.updatePlayersInjuries(skip + this.BATCH_SIZE);
+    } else {
+      this.logger.log('finished updating injuries');
     }
   }
 }

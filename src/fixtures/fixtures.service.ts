@@ -6,7 +6,7 @@ import { Between, Repository } from 'typeorm';
 import { PlayersService } from '../players/players.service';
 import { BotService } from '../telegram-bot/telegram-bot.service';
 
-const FIXTURES_TIME_INTERVAL = 24 * 60 * 60 * 1000;
+const FIXTURES_TIME_INTERVAL = 3 * 60 * 60 * 1000;
 
 @Injectable()
 export class FixturesService {
@@ -24,13 +24,12 @@ export class FixturesService {
     });
   }
 
-  @Cron(CronExpression.EVERY_6_HOURS)
+  @Cron(CronExpression.EVERY_HOUR)
   async getFixtures() {
     const now = new Date();
     const intervalFromNow = new Date(now.getTime() + FIXTURES_TIME_INTERVAL);
-    // TODO: add check if fixtures are already notified
     const fixtures = await this.fixtureRepository.find({
-      where: { fixtureDate: Between(now, intervalFromNow) },
+      where: { fixtureDate: Between(now, intervalFromNow), isNotified: false },
       relations: ['league'],
     });
     if (fixtures.length > 0) {
