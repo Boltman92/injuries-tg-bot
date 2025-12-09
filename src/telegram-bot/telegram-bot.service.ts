@@ -99,57 +99,62 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     };
 
     this.messageHandler = async (ctx: Context) => {
-      const text = ctx.text as string;
-      if (text.startsWith('delete')) {
-        return this.deletePlayerHandler(ctx);
-      }
-      const playersNames = text.split('\n');
-      const notFoundPlayers: string[] = [];
-      const foundedPlayers: Player[] = [];
-      for (const playerName of playersNames) {
-        const player =
-          await this.playersService.findPlayerInDBorFotmob(playerName);
-        if (!player) {
-          notFoundPlayers.push(playerName);
-          continue;
+      try {
+        const text = ctx.text as string;
+        if (text.startsWith('delete')) {
+          return this.deletePlayerHandler(ctx);
         }
+        const playersNames = text.split('\n');
+        const notFoundPlayers: string[] = [];
+        const foundedPlayers: Player[] = [];
+        for (const playerName of playersNames) {
+          const player =
+            await this.playersService.findPlayerInDBorFotmob(playerName);
+          if (!player) {
+            notFoundPlayers.push(playerName);
+            continue;
+          }
 
-        if (!ctx.from?.is_bot) {
-          const name: string = ctx?.from?.username ?? '';
-          const telegramId: string = ctx?.from?.id.toString() ?? '';
+          if (!ctx.from?.is_bot) {
+            const name: string = ctx?.from?.username ?? '';
+            const telegramId: string = ctx?.from?.id.toString() ?? '';
 
-          const user = await this.userService.findOrCreateUser(
-            name,
-            telegramId,
-          );
+            const user = await this.userService.findOrCreateUser(
+              name,
+              telegramId,
+            );
 
-          const savedPlayer = await this.playersService.savePlayer(
-            user,
-            player,
-          );
-          if (savedPlayer) {
-            foundedPlayers.push(savedPlayer);
+            const savedPlayer = await this.playersService.savePlayer(
+              user,
+              player,
+            );
+            if (savedPlayer) {
+              foundedPlayers.push(savedPlayer);
+            }
           }
         }
+
+        if (foundedPlayers.length === 0) {
+          return ctx.reply('no players found');
+        }
+
+        this.logger.log(foundedPlayers);
+
+        const playerList = foundedPlayers
+          .map(
+            (player) =>
+              `<b>${player.fullName}</b> from ${FlagEmojiByLeagueId[player.league?.id ?? 0] ?? ''} ${player.teamName}`,
+          )
+          .join('\n');
+
+        return ctx.reply(
+          `thanks, i will start tracking injuries for: \n${playerList}`,
+          { parse_mode: 'HTML' },
+        );
+      } catch (error) {
+        this.logger.error((error as Error).message);
+        return ctx.reply(`sorry, something went wrong, please try again later`);
       }
-
-      if (foundedPlayers.length === 0) {
-        return ctx.reply('no players found');
-      }
-
-      this.logger.log(foundedPlayers);
-
-      const playerList = foundedPlayers
-        .map(
-          (player) =>
-            `<b>${player.fullName}</b> from ${FlagEmojiByLeagueId[player.league?.id ?? 0] ?? ''} ${player.teamName}`,
-        )
-        .join('\n');
-
-      return ctx.reply(
-        `thanks, i will start tracking injuries for: \n${playerList}`,
-        { parse_mode: 'HTML' },
-      );
     };
     this.bot.on('message', this.messageHandler);
 

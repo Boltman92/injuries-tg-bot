@@ -25,7 +25,21 @@ export class PlayersService {
   public async findPlayer(name: string): Promise<PlayerResponse | null> {
     try {
       const url = this.getSearchPlayerUrl(name);
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          Accept: 'application/json, text/plain, */*',
+          Referer: 'https://www.fotmob.com/',
+        },
+      });
+
+      if (!response.ok) {
+        this.logger.error(
+          `Failed to fetch suggestions data: ${response.statusText}`,
+        );
+        return null;
+      }
       const data: {
         title: { key: string };
         suggestions: SuggestionResponse[];
@@ -54,8 +68,20 @@ export class PlayersService {
         );
 
         const playerInfoResponse = await fetch(playerUrl, {
-          headers: { 'x-mas': this.puppeteerService.xMasToken ?? '' },
+          headers: {
+            'x-mas': this.puppeteerService.xMasToken ?? '',
+            'User-Agent': 'Mozilla/5.0',
+            Accept: 'application/json, text/plain, */*',
+            Referer: 'https://www.fotmob.com/',
+          },
         });
+
+        if (!playerInfoResponse.ok) {
+          this.logger.error(
+            `Failed to fetch player info data: ${playerInfoResponse.statusText}`,
+          );
+          return null;
+        }
 
         const playerInfo: PlayerResponse = await playerInfoResponse.json();
 
