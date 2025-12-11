@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import puppeteer, { Browser, Page, HTTPRequest } from 'puppeteer';
 import { Cron, CronExpression, SchedulerRegistry } from '@nestjs/schedule';
+import dotenv from 'dotenv';
+dotenv.config();
 
 @Injectable()
 export class PuppeteerService
@@ -19,10 +21,21 @@ export class PuppeteerService
   constructor(private schedulerRegistry: SchedulerRegistry) {}
 
   async getBrowser(): Promise<Browser> {
+    // Check if browser exists and is still connected
+    if (this.browser) {
+      try {
+        // Test if browser is still connected by checking if we can get pages
+        await this.browser.pages();
+      } catch {
+        this.logger.warn('Browser connection closed, relaunching...');
+        this.browser = null;
+      }
+    }
+
     if (!this.browser) {
       this.logger.log('Launching Puppeteer...');
       this.browser = await puppeteer.launch({
-        executablePath: '/usr/bin/chromium',
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
         headless: true,
       });

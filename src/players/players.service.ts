@@ -2,14 +2,16 @@
 import { Injectable } from '@nestjs/common';
 import { Player } from './entity/Player';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Like, Repository } from 'typeorm';
+import { Between, Like, Repository } from 'typeorm';
 import { PlayerResponse, SuggestionResponse } from './players.interfaces';
 import { User } from '../users/entity/User';
 import { PuppeteerService } from '../puppeteer/puppeteer.service';
 import { Logger } from '@nestjs/common';
 import { LeaguesService } from '../leagues/leagues.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { Fixture } from '../fixtures/entity/Fixture';
 
+const FIXTURES_TIME_INTERVAL = 12 * 60 * 60 * 1000;
 @Injectable()
 export class PlayersService {
   private readonly logger = new Logger(PlayersService.name);
@@ -18,6 +20,8 @@ export class PlayersService {
     @InjectRepository(Player)
     private readonly playerRepository: Repository<Player>,
     private readonly leaguesService: LeaguesService,
+    @InjectRepository(Fixture)
+    private readonly fixtureRepository: Repository<Fixture>,
   ) {}
 
   private readonly BATCH_SIZE = 100;
@@ -222,6 +226,16 @@ export class PlayersService {
 
   @Cron(CronExpression.EVERY_6_HOURS)
   async updatePlayersInjuries(skip: number = 0) {
+    const now = new Date();
+    const intervalFromNow = new Date(now.getTime() + FIXTURES_TIME_INTERVAL);
+    const fixtures = await this.fixtureRepository.find({
+      where: { fixtureDate: Between(now, intervalFromNow), isNotified: false },
+    });
+    if (fixtures.length === 0) {
+      this.logger.log('no fixtures to update injuries for');
+      return;
+    }
+
     const players = await this.playerRepository.find({
       take: this.BATCH_SIZE,
       skip,

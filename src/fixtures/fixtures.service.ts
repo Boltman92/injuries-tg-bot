@@ -3,7 +3,6 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Fixture } from './entity/Fixture';
 import { Between, Repository } from 'typeorm';
-import { PlayersService } from '../players/players.service';
 import { BotService } from '../telegram-bot/telegram-bot.service';
 
 const FIXTURES_TIME_INTERVAL = 3 * 60 * 60 * 1000;
@@ -14,7 +13,6 @@ export class FixturesService {
   constructor(
     @InjectRepository(Fixture)
     private readonly fixtureRepository: Repository<Fixture>,
-    private readonly playersService: PlayersService,
     private readonly botService: BotService,
   ) {}
 

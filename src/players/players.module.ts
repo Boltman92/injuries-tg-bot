@@ -5,13 +5,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Player } from './entity/Player';
 import { PuppeteerModule } from '../puppeteer/puppeteer.module';
 import { LeaguesModule } from '../leagues/leagues.module';
+import { Fixture } from '../fixtures/entity/Fixture';
 
 @Module({
   imports: [
     ConfigModule,
     PuppeteerModule,
     LeaguesModule,
-    TypeOrmModule.forFeature([Player]),
+    TypeOrmModule.forFeature([Player, Fixture]),
   ],
   providers: [PlayersService],
   exports: [PlayersService],
