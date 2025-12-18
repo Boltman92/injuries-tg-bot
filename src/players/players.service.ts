@@ -10,8 +10,11 @@ import { Logger } from '@nestjs/common';
 import { LeaguesService } from '../leagues/leagues.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Fixture } from '../fixtures/entity/Fixture';
+import { COMMON_SURNAMES } from './players.constants';
+import { normalizeName } from './players.utils';
 
 const FIXTURES_TIME_INTERVAL = 12 * 60 * 60 * 1000;
+
 @Injectable()
 export class PlayersService {
   private readonly logger = new Logger(PlayersService.name);
@@ -26,7 +29,9 @@ export class PlayersService {
 
   private readonly BATCH_SIZE = 100;
 
-  public async findPlayer(name: string): Promise<PlayerResponse | null> {
+  public async findPlayerSuggestion(
+    name: string,
+  ): Promise<SuggestionResponse[] | null> {
     try {
       const url = this.getSearchPlayerUrl(name);
       const response = await fetch(url, {
@@ -57,46 +62,17 @@ export class PlayersService {
         return null;
       }
 
-      const fotmobPlayerName = players?.suggestions?.[0]?.name;
+      return players.suggestions;
 
-      this.logger.log(fotmobPlayerName);
+      // const fotmobPlayerName = players?.suggestions?.[0]?.name;
 
-      if (fotmobPlayerName.toLowerCase().includes(name.toLowerCase())) {
-        const player = players?.suggestions?.[0];
+      // this.logger.log(fotmobPlayerName);
 
-        const playerUrl = this.getPlayerInfoUrl(player.id);
+      // if (normalizeName(fotmobPlayerName).includes(normalizeName(name))) {
+      //   const player = players?.suggestions?.[0];
 
-        this.logger.log(
-          this.puppeteerService.xMasToken,
-          'xmas token inside player service',
-        );
-
-        const playerInfoResponse = await fetch(playerUrl, {
-          headers: {
-            'x-mas': this.puppeteerService.xMasToken ?? '',
-            'User-Agent': 'Mozilla/5.0',
-            Accept: 'application/json, text/plain, */*',
-            Referer: 'https://www.fotmob.com/',
-          },
-        });
-
-        if (!playerInfoResponse.ok) {
-          this.logger.error(
-            `Failed to fetch player info data: ${playerInfoResponse.statusText}`,
-          );
-          return null;
-        }
-
-        const playerInfo: PlayerResponse = await playerInfoResponse.json();
-
-        //this.logger.log(playerInfo);
-
-        const url = this.getPlayerInfoUrl(player.id);
-
-        this.logger.log(url);
-
-        return playerInfo;
-      }
+      //   return player.id;
+      // }
 
       return null;
     } catch (error) {
@@ -105,17 +81,60 @@ export class PlayersService {
     }
   }
 
+  public async findPlayerInfo(
+    playerId: string,
+  ): Promise<PlayerResponse | null> {
+    const playerUrl = this.getPlayerInfoUrl(playerId);
+
+    this.logger.log(
+      this.puppeteerService.xMasToken,
+      'xmas token inside player service',
+    );
+
+    const playerInfoResponse = await fetch(playerUrl, {
+      headers: {
+        'x-mas': this.puppeteerService.xMasToken ?? '',
+        'User-Agent': 'Mozilla/5.0',
+        Accept: 'application/json, text/plain, */*',
+        Referer: 'https://www.fotmob.com/',
+      },
+    });
+
+    if (!playerInfoResponse.ok) {
+      this.logger.error(
+        `Failed to fetch player info data: ${playerInfoResponse.statusText}`,
+      );
+      return null;
+    }
+
+    const playerInfo: PlayerResponse = await playerInfoResponse.json();
+
+    return playerInfo;
+  }
+
   public async findPlayerInDBorFotmob(
     name: string,
   ): Promise<PlayerResponse | Player | null> {
-    const playersFromDB = await this.findPlayerInDBByName(name);
-    if (playersFromDB.length === 1) {
-      return playersFromDB[0];
+    if (!COMMON_SURNAMES.includes(name.toLowerCase())) {
+      const playersFromDB = await this.findPlayerInDBByName(name);
+      if (playersFromDB.length === 1) {
+        return playersFromDB[0];
+      }
     }
-    const player = await this.findPlayer(name);
-    if (player) {
-      return player;
+    const players = await this.findPlayerSuggestion(name);
+    if (!players || players.length === 0) {
+      return null;
     }
+
+    // search results only if surname from user has exact match with the surname from the suggestions
+    if (normalizeName(name) === normalizeName(players[0].name)) {
+      // TODO: add a logic to choose the best player from the suggestions
+      const playerInfo = await this.findPlayerInfo(players[0].id);
+      if (playerInfo) {
+        return playerInfo;
+      }
+    }
+
     return null;
   }
 
@@ -162,8 +181,6 @@ export class PlayersService {
         return this.playerRepository.save(existedPlayer);
       }
     }
-
-    this.logger.log(user, 'user');
 
     const league = await this.leaguesService.findLeagueInDB(
       mainLeague.leagueId,
