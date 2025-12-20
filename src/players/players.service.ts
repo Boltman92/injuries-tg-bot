@@ -127,7 +127,7 @@ export class PlayersService {
     }
 
     // search results only if surname from user has exact match with the surname from the suggestions
-    if (normalizeName(name).includes(normalizeName(players[0].name))) {
+    if (normalizeName(players[0].name).includes(normalizeName(name))) {
       // TODO: add a logic to choose the best player from the suggestions
       const playerInfo = await this.findPlayerInfo(players[0].id);
       if (playerInfo) {
