@@ -58,12 +58,16 @@ export class MantraService {
   }
 
   private async login(page: puppeteer.Page) {
-    await page.goto('https://mantrafootball.org/users/sign_in', {
-      waitUntil: 'networkidle2',
-    });
-    await page.type('input[name="user[email]"]', this.email);
-    await page.type('input[name="user[password]"]', this.password);
-    await page.click('input[type="submit"]');
-    await page.waitForNavigation({ waitUntil: 'networkidle2' });
+    try {
+      await page.goto('https://mantrafootball.org/users/sign_in', {
+        waitUntil: 'networkidle2',
+      });
+      await page.type('input[name="user[email]"]', this.email);
+      await page.type('input[name="user[password]"]', this.password);
+      await page.click('input[type="submit"]');
+      await page.waitForNavigation({ waitUntil: 'networkidle2' });
+    } catch {
+      console.log('user already logged in');
+    }
   }
 }
