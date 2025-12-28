@@ -73,8 +73,6 @@ export class PlayersService {
 
       //   return player.id;
       // }
-
-      return null;
     } catch (error) {
       this.logger.error(error);
       return null;
@@ -155,6 +153,7 @@ export class PlayersService {
       const userAlreadyExists = playerInfo.users.find(
         (u) => u.telegramId === user.telegramId,
       );
+      this.logger.log(userAlreadyExists);
       if (userAlreadyExists) {
         return;
       }

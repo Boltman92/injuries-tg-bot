@@ -13,6 +13,7 @@ import { Fixture } from '../fixtures/entity/Fixture';
 import { Message } from 'telegraf/types';
 import { Player } from '../players/entity/Player';
 import { FlagEmojiByLeagueId } from './constants';
+import { MantraService } from '../mantra/mantra.service';
 
 @Injectable()
 export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -25,6 +26,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     private configService: ConfigService,
     private playersService: PlayersService,
     private userService: UsersService,
+    private mantraService: MantraService,
   ) {
     const token = this.configService.get<string>('TELEGRAM_BOT_TOKEN') ?? '';
     if (!token) {
@@ -101,10 +103,20 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     this.messageHandler = async (ctx: Context) => {
       try {
         const text = ctx.text as string;
+        let playersNames: string[] = [];
         if (text.startsWith('delete')) {
           return this.deletePlayerHandler(ctx);
         }
-        const playersNames = text.split('\n');
+        if (text.startsWith('https://mantrafootball.org/teams')) {
+          const team = await this.mantraService.getMantraTeam(text);
+          playersNames = team;
+        } else if (text.startsWith('https://')) {
+          return ctx.reply(
+            'this url is not supported, please, send a valid url like: https://mantrafootball.org/teams/{your team id}',
+          );
+        } else {
+          playersNames = text.split('\n');
+        }
         const notFoundPlayers: string[] = [];
         const foundedPlayers: Player[] = [];
         for (const playerName of playersNames) {
@@ -114,6 +126,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
             notFoundPlayers.push(playerName);
             continue;
           }
+          this.logger.log(player);
 
           if (!ctx.from?.is_bot) {
             const name: string = ctx?.from?.username ?? '';
