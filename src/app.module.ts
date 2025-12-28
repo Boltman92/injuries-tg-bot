@@ -11,6 +11,7 @@ import { AppDataSource } from './data-source';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LeaguesModule } from './leagues/leagues.module';
 import { PuppeteerModule } from './puppeteer/puppeteer.module';
+import { MantraModule } from './mantra/mantra.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { PuppeteerModule } from './puppeteer/puppeteer.module';
     UsersModule,
     FixturesModule,
     LeaguesModule,
+    MantraModule,
   ],
   controllers: [AppController],
   providers: [AppService],
