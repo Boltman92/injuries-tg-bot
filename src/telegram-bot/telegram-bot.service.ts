@@ -22,7 +22,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
   private messageHandler: (ctx: Context) => Promise<Message.TextMessage | void>;
   private myTeamHandler: (ctx: Context) => Promise<Message.TextMessage | void>;
   private deletePlayerHandler: (ctx: Context) => Promise<Message.TextMessage>;
-  private maxMessageLength = 1024;
+  private playersPerMessage = 100;
   constructor(
     private configService: ConfigService,
     private playersService: PlayersService,
@@ -176,9 +176,11 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     playersArray?: string[],
   ) {
     const playersChunks: string[][] = [];
-    if (playersArray && playersArray?.length > 100) {
-      for (let i = 0; i < playersArray?.length; i += 100) {
-        playersChunks.push(playersArray?.slice(i, i + 100) ?? []);
+    if (playersArray && playersArray?.length > this.playersPerMessage) {
+      for (let i = 0; i < playersArray?.length; i += this.playersPerMessage) {
+        playersChunks.push(
+          playersArray?.slice(i, i + this.playersPerMessage) ?? [],
+        );
       }
     }
     for (const chunk of playersChunks) {
