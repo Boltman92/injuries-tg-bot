@@ -19,9 +19,10 @@ import { MantraService } from '../mantra/mantra.service';
 export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
   private bot: Telegraf<Context>;
   private readonly logger = new Logger(BotService.name);
-  private messageHandler: (ctx: Context) => Promise<Message.TextMessage>;
-  private myTeamHandler: (ctx: Context) => Promise<Message.TextMessage>;
+  private messageHandler: (ctx: Context) => Promise<Message.TextMessage | void>;
+  private myTeamHandler: (ctx: Context) => Promise<Message.TextMessage | void>;
   private deletePlayerHandler: (ctx: Context) => Promise<Message.TextMessage>;
+  private maxMessageLength = 1024;
   constructor(
     private configService: ConfigService,
     private playersService: PlayersService,
@@ -62,18 +63,11 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
       if (!userEntity) {
         return ctx.reply('you are not logged in, please start the bot first');
       }
-      const playerList = userEntity.players
-        .map(
-          (player, index) =>
-            `<b>${index + 1}. ${FlagEmojiByLeagueId[player.league?.id ?? 0] ?? ''} ${player.fullName}</b>`,
-        )
-        .join('\n');
-      return ctx.reply(
-        `your team is: \n${playerList} \n \nto stop tracking injuries for a player, send 'delete {playerName}'`,
-        {
-          parse_mode: 'HTML',
-        },
+      const playerList = userEntity.players.map(
+        (player, index) =>
+          `<b>${index + 1}. ${FlagEmojiByLeagueId[player.league?.id ?? 0] ?? ''} ${player.fullName}</b>`,
       );
+      return this.sendMessageWithPlayers(ctx, 'your team is: \n', playerList);
     };
     this.bot.command('myTeam', this.myTeamHandler);
 
@@ -153,16 +147,14 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
 
         this.logger.log(foundedPlayers);
 
-        const playerList = foundedPlayers
-          .map(
-            (player) =>
-              `<b>${player.fullName}</b> from ${FlagEmojiByLeagueId[player.league?.id ?? 0] ?? ''} ${player.teamName}`,
-          )
-          .join('\n');
-
-        return ctx.reply(
-          `thanks, i will start tracking injuries for: \n${playerList}`,
-          { parse_mode: 'HTML' },
+        const playerList = foundedPlayers.map(
+          (player) =>
+            `<b>${player.fullName}</b> from ${FlagEmojiByLeagueId[player.league?.id ?? 0] ?? ''} ${player.teamName}`,
+        );
+        return this.sendMessageWithPlayers(
+          ctx,
+          'thanks, i will start tracking injuries for: \n',
+          playerList,
         );
       } catch (error) {
         this.logger.error((error as Error).message);
@@ -176,6 +168,27 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     void this.bot.launch();
 
     console.log('🤖 Telegram bot is running...');
+  }
+
+  async sendMessageWithPlayers(
+    ctx: Context,
+    message: string,
+    playersArray?: string[],
+  ) {
+    const playersChunks: string[][] = [];
+    if (playersArray && playersArray?.length > 100) {
+      for (let i = 0; i < playersArray?.length; i += 100) {
+        playersChunks.push(playersArray?.slice(i, i + 100) ?? []);
+      }
+    }
+    for (const chunk of playersChunks) {
+      const msg = message + chunk.join('\n');
+      await ctx.reply(msg, { parse_mode: 'HTML' });
+    }
+    if (playersChunks.length === 0) {
+      const msg = message + (playersArray?.join('\n') ?? '');
+      await ctx.reply(msg, { parse_mode: 'HTML' });
+    }
   }
 
   async notifyAllUsersByLeagueId(fixture: Fixture) {
