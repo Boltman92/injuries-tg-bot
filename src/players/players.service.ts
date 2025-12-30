@@ -242,14 +242,20 @@ export class PlayersService {
 
   @Cron(CronExpression.EVERY_6_HOURS)
   async updatePlayersInjuries(skip: number = 0) {
-    const now = new Date();
-    const intervalFromNow = new Date(now.getTime() + FIXTURES_TIME_INTERVAL);
-    const fixtures = await this.fixtureRepository.find({
-      where: { fixtureDate: Between(now, intervalFromNow), isNotified: false },
-    });
-    if (fixtures.length === 0) {
-      this.logger.log('no fixtures to update injuries for');
-      return;
+    // initially check if there are any fixtures to update injuries for
+    if (skip === 0) {
+      const now = new Date();
+      const intervalFromNow = new Date(now.getTime() + FIXTURES_TIME_INTERVAL);
+      const fixtures = await this.fixtureRepository.find({
+        where: {
+          fixtureDate: Between(now, intervalFromNow),
+          isNotified: false,
+        },
+      });
+      if (fixtures.length === 0) {
+        this.logger.log('no fixtures to update injuries for');
+        return;
+      }
     }
 
     const players = await this.playerRepository.find({
