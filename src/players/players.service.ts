@@ -42,6 +42,7 @@ export class PlayersService {
           Accept: 'application/json, text/plain, */*',
           Referer: 'https://www.fotmob.com/',
         },
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -97,6 +98,7 @@ export class PlayersService {
         Accept: 'application/json, text/plain, */*',
         Referer: 'https://www.fotmob.com/',
       },
+      credentials: 'include',
     });
 
     if (!playerInfoResponse.ok) {
@@ -236,6 +238,7 @@ export class PlayersService {
         Accept: 'application/json, text/plain, */*',
         Referer: 'https://www.fotmob.com/',
       },
+      credentials: 'include',
     });
     const playerInfo: PlayerResponse = await playerInfoResponse.json();
     if (playerInfo.injuryInformation) {
