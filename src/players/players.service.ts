@@ -37,6 +37,7 @@ export class PlayersService {
       const response = await fetch(url, {
         method: 'GET',
         headers: {
+          'x-mas': this.puppeteerService.xMasToken ?? '',
           'User-Agent': 'Mozilla/5.0',
           Accept: 'application/json, text/plain, */*',
           Referer: 'https://www.fotmob.com/',
@@ -229,7 +230,12 @@ export class PlayersService {
   } | null> {
     const playerUrl = this.getPlayerInfoUrl(player.fotmobId);
     const playerInfoResponse = await fetch(playerUrl, {
-      headers: { 'x-mas': this.puppeteerService.xMasToken ?? '' },
+      headers: {
+        'x-mas': this.puppeteerService.xMasToken ?? '',
+        'User-Agent': 'Mozilla/5.0',
+        Accept: 'application/json, text/plain, */*',
+        Referer: 'https://www.fotmob.com/',
+      },
     });
     const playerInfo: PlayerResponse = await playerInfoResponse.json();
     if (playerInfo.injuryInformation) {
