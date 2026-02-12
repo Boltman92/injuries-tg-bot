@@ -234,12 +234,12 @@ export interface PlayerResponse {
   contractEnd: DateInfo;
   isCoach: boolean;
   isCaptain: boolean;
-  primaryTeam: PrimaryTeam;
+  primaryTeam: PrimaryTeam | null;
   positionDescription: PositionDescription;
   injuryInformation: InjuryInformation | null;
   internationalDuty: any;
   playerInformation: PlayerInformationItem[];
-  mainLeague: MainLeague;
+  mainLeague: MainLeague | null;
   trophies: Trophies;
   recentMatches: RecentMatch[];
   careerHistory: {

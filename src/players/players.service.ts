@@ -166,8 +166,13 @@ export class PlayersService {
       mainLeague,
       injuryInformation,
     } = playerInfo;
-    const { teamName, teamId } = playerInfo.primaryTeam;
-    //const { leagueId, leagueName } = playerInfo.mainLeague;
+    const { teamName, teamId } = playerInfo.primaryTeam ?? {};
+
+    // if primary team is not found, return do not save the player, but don't break the flow
+    if (!teamName || !teamId) {
+      return;
+    }
+
     const existedPlayer = await this.findPlayerInDB(fotmobId.toString());
     if (existedPlayer) {
       const userAlreadyExists = existedPlayer.users.find(
@@ -182,7 +187,7 @@ export class PlayersService {
     }
 
     const league = await this.leaguesService.findLeagueInDB(
-      mainLeague.leagueId,
+      mainLeague?.leagueId ?? 0,
     );
 
     if (!league) {
