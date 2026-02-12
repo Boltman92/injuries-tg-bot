@@ -120,7 +120,6 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
             notFoundPlayers.push(playerName);
             continue;
           }
-          this.logger.log(player);
 
           if (!ctx.from?.is_bot) {
             const name: string = ctx?.from?.username ?? '';
