@@ -85,34 +85,19 @@ export class PlayersService {
 
   public async findPlayerInfo(
     playerId: string,
+    playerName: string,
   ): Promise<PlayerResponse | null> {
-    const playerUrl = this.getPlayerInfoUrl(playerId);
+    const playerUrl = this.generatePlayerInfoUrl(playerId, playerName);
 
-    this.logger.log(
-      this.puppeteerService.cookieHeader,
-      'cookie header inside player service',
-    );
-
-    const playerInfoResponse = await this.impitService.fetch(playerUrl, {
-      headers: {
-        'x-mas': this.puppeteerService.xMasToken ?? '',
-        cookie: this.puppeteerService.cookieHeader ?? '',
-        'User-Agent': 'Mozilla/5.0',
-        Accept: 'application/json, text/plain, */*',
-        Referer: 'https://www.fotmob.com/',
-      },
-    });
-
-    if (!playerInfoResponse.ok) {
-      this.logger.error(
-        `Failed to fetch player info data: ${playerInfoResponse.statusText}`,
+    const playerInfoResponse =
+      await this.puppeteerService.parseScriptTagFromUrl<PlayerResponse>(
+        playerUrl,
       );
+    if (!playerInfoResponse) {
       return null;
     }
 
-    const playerInfo: PlayerResponse = await playerInfoResponse.json();
-
-    return playerInfo;
+    return playerInfoResponse;
   }
 
   public async findPlayerInDBorFotmob(
@@ -132,7 +117,10 @@ export class PlayersService {
     // search results only if surname from user has exact match with the surname from the suggestions
     if (normalizeName(players[0].name).includes(normalizeName(name))) {
       // TODO: add a logic to choose the best player from the suggestions
-      const playerInfo = await this.findPlayerInfo(players[0].id);
+      const playerInfo = await this.findPlayerInfo(
+        players[0].id,
+        players[0].name,
+      );
       if (playerInfo) {
         return playerInfo;
       }
@@ -145,8 +133,8 @@ export class PlayersService {
     return `https://www.fotmob.com/api/data/search/suggest?hits=50&lang=en&term=${name}`;
   }
 
-  private getPlayerInfoUrl(id: string): string {
-    return `https://www.fotmob.com/api/data/playerData?id=${id}&includeMarketValues=true`;
+  private generatePlayerInfoUrl(id: string, playerName: string): string {
+    return `https://www.fotmob.com/players/${id}/${playerName.toLowerCase().replace(/ /g, '-')}`;
   }
 
   private sleep(ms: number): Promise<void> {
@@ -232,16 +220,17 @@ export class PlayersService {
     injury: string;
     expectedReturn: string;
   } | null> {
-    const playerUrl = this.getPlayerInfoUrl(player.fotmobId);
-    const playerInfoResponse = await this.impitService.fetch(playerUrl, {
-      headers: {
-        'x-mas': this.puppeteerService.xMasToken ?? '',
-        'User-Agent': 'Mozilla/5.0',
-        Accept: 'application/json, text/plain, */*',
-        Referer: 'https://www.fotmob.com/',
-      },
-    });
-    const playerInfo: PlayerResponse = await playerInfoResponse.json();
+    const playerUrl = this.generatePlayerInfoUrl(
+      player.fotmobId,
+      player.fullName,
+    );
+    const playerInfo =
+      await this.puppeteerService.parseScriptTagFromUrl<PlayerResponse>(
+        playerUrl,
+      );
+    if (!playerInfo) {
+      return null;
+    }
     if (playerInfo.injuryInformation) {
       return {
         injury: playerInfo.injuryInformation.name

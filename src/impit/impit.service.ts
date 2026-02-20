@@ -12,7 +12,6 @@ export class ImpitService {
       browser: 'chrome',
       ignoreTlsErrors: true,
       headers: {
-        cookie: this.puppeteerService.cookieHeader ?? '',
         'x-mas': this.puppeteerService.xMasToken ?? '',
       },
     });
