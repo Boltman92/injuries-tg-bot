@@ -6,6 +6,7 @@ import { Between, Like, Repository } from 'typeorm';
 import { PlayerResponse, SuggestionResponse } from './players.interfaces';
 import { User } from '../users/entity/User';
 import { PuppeteerService } from '../puppeteer/puppeteer.service';
+import { ImpitService } from '../impit/impit.service';
 import { Logger } from '@nestjs/common';
 import { LeaguesService } from '../leagues/leagues.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -20,6 +21,7 @@ export class PlayersService {
   private readonly logger = new Logger(PlayersService.name);
   constructor(
     private puppeteerService: PuppeteerService,
+    private impitService: ImpitService,
     @InjectRepository(Player)
     private readonly playerRepository: Repository<Player>,
     private readonly leaguesService: LeaguesService,
@@ -28,13 +30,14 @@ export class PlayersService {
   ) {}
 
   private readonly BATCH_SIZE = 100;
+  private isInjuryEpdate = false;
 
   public async findPlayerSuggestion(
     name: string,
   ): Promise<SuggestionResponse[] | null> {
     try {
       const url = this.getSearchPlayerUrl(name);
-      const response = await fetch(url, {
+      const response = await this.impitService.fetch(url, {
         method: 'GET',
         headers: {
           'x-mas': this.puppeteerService.xMasToken ?? '',
@@ -42,7 +45,6 @@ export class PlayersService {
           Accept: 'application/json, text/plain, */*',
           Referer: 'https://www.fotmob.com/',
         },
-        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -87,18 +89,18 @@ export class PlayersService {
     const playerUrl = this.getPlayerInfoUrl(playerId);
 
     this.logger.log(
-      this.puppeteerService.xMasToken,
-      'xmas token inside player service',
+      this.puppeteerService.cookieHeader,
+      'cookie header inside player service',
     );
 
-    const playerInfoResponse = await fetch(playerUrl, {
+    const playerInfoResponse = await this.impitService.fetch(playerUrl, {
       headers: {
         'x-mas': this.puppeteerService.xMasToken ?? '',
+        cookie: this.puppeteerService.cookieHeader ?? '',
         'User-Agent': 'Mozilla/5.0',
         Accept: 'application/json, text/plain, */*',
         Referer: 'https://www.fotmob.com/',
       },
-      credentials: 'include',
     });
 
     if (!playerInfoResponse.ok) {
@@ -144,7 +146,7 @@ export class PlayersService {
   }
 
   private getPlayerInfoUrl(id: string): string {
-    return `https://www.fotmob.com/api/data/playerData?id=${id}`;
+    return `https://www.fotmob.com/api/data/playerData?id=${id}&includeMarketValues=true`;
   }
 
   private sleep(ms: number): Promise<void> {
@@ -231,14 +233,13 @@ export class PlayersService {
     expectedReturn: string;
   } | null> {
     const playerUrl = this.getPlayerInfoUrl(player.fotmobId);
-    const playerInfoResponse = await fetch(playerUrl, {
+    const playerInfoResponse = await this.impitService.fetch(playerUrl, {
       headers: {
         'x-mas': this.puppeteerService.xMasToken ?? '',
         'User-Agent': 'Mozilla/5.0',
         Accept: 'application/json, text/plain, */*',
         Referer: 'https://www.fotmob.com/',
       },
-      credentials: 'include',
     });
     const playerInfo: PlayerResponse = await playerInfoResponse.json();
     if (playerInfo.injuryInformation) {
@@ -254,10 +255,15 @@ export class PlayersService {
     return null;
   }
 
-  @Cron(CronExpression.EVERY_6_HOURS)
+  @Cron(CronExpression.EVERY_10_MINUTES)
   async updatePlayersInjuries(skip: number = 0) {
     // initially check if there are any fixtures to update injuries for
     if (skip === 0) {
+      if (this.isInjuryEpdate) {
+        this.logger.log('injury update is already in progress');
+        return;
+      }
+      this.isInjuryEpdate = true;
       const now = new Date();
       const intervalFromNow = new Date(now.getTime() + FIXTURES_TIME_INTERVAL);
       const fixtures = await this.fixtureRepository.find({
@@ -275,6 +281,9 @@ export class PlayersService {
     const players = await this.playerRepository.find({
       take: this.BATCH_SIZE,
       skip,
+      order: {
+        id: 'ASC',
+      },
     });
 
     if (players.length === 0) {
@@ -321,6 +330,7 @@ export class PlayersService {
       await this.updatePlayersInjuries(skip + this.BATCH_SIZE);
     } else {
       this.logger.log('finished updating injuries');
+      this.isInjuryEpdate = false;
     }
   }
 }
