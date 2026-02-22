@@ -19,9 +19,6 @@ import { MantraService } from '../mantra/mantra.service';
 export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
   private bot: Telegraf<Context>;
   private readonly logger = new Logger(BotService.name);
-  private messageHandler: (ctx: Context) => Promise<Message.TextMessage | void>;
-  private myTeamHandler: (ctx: Context) => Promise<Message.TextMessage | void>;
-  //private deletePlayerHandler: (ctx: Context) => Promise<Message.TextMessage>;
   private playersPerMessage = 100;
   constructor(
     private configService: ConfigService,
@@ -83,6 +80,105 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     }
   }
 
+  async handleSavePlayersAndNotifyUser(
+    userId: number,
+    username: string,
+    playersNames: string[],
+  ) {
+    try {
+      const notFoundPlayers: string[] = [];
+      const foundedPlayers: Player[] = [];
+      for (const playerName of playersNames) {
+        const player =
+          await this.playersService.findPlayerInDBorFotmob(playerName);
+        if (!player) {
+          notFoundPlayers.push(playerName);
+          continue;
+        }
+
+        const user = await this.userService.findOrCreateUser(
+          username,
+          userId.toString(),
+        );
+
+        const savedPlayer = await this.playersService.savePlayer(user, player);
+        if (savedPlayer) {
+          foundedPlayers.push(savedPlayer);
+        }
+      }
+
+      if (foundedPlayers.length === 0) {
+        return this.bot.telegram.sendMessage(userId, 'no players found');
+      }
+
+      this.logger.log(foundedPlayers);
+
+      const playerList = foundedPlayers.map(
+        (player) =>
+          `<b>${player.fullName}</b> from ${FlagEmojiByLeagueId[player.league?.id ?? 0] ?? ''} ${player.teamName}`,
+      );
+      return this.sendMessageWithPlayers(
+        userId,
+        'thanks, i will start tracking injuries for: \n',
+        playerList,
+      );
+    } catch (error) {
+      this.logger.error((error as Error).message);
+      return false;
+    }
+  }
+  async messageHandler(ctx: Context) {
+    try {
+      const text = ctx.text as string;
+      let playersNames: string[] = [];
+      if (text.startsWith('delete')) {
+        return await this.deletePlayerHandler(ctx);
+      }
+      if (text.startsWith('https://mantrafootball.org/teams')) {
+        void ctx.reply('please wait, your team is being processed...');
+        const team = await this.mantraService.getMantraTeam(text);
+        playersNames = team;
+      } else if (text.startsWith('https://')) {
+        return ctx.reply(
+          'this url is not supported, please, send a valid url like: https://mantrafootball.org/teams/{your team id}',
+        );
+      } else {
+        playersNames = text.split('\n');
+      }
+
+      void this.handleSavePlayersAndNotifyUser(
+        ctx.from?.id ?? 0,
+        ctx.from?.username ?? '',
+        playersNames,
+      );
+    } catch (error) {
+      this.logger.error((error as Error).message);
+      return ctx.reply(`sorry, something went wrong, please try again later`);
+    }
+  }
+
+  async myTeamHandler(ctx: Context) {
+    const user = ctx.from;
+    if (!user) {
+      return ctx.reply('you are not logged in, please start the bot first');
+    }
+    const userEntity = await this.userService.findUserWithPlayers(
+      user.id.toString(),
+    );
+    if (!userEntity) {
+      return ctx.reply('you are not logged in, please start the bot first');
+    }
+    const playerList = userEntity.players.map(
+      (player, index) =>
+        `<b>${index + 1}. ${FlagEmojiByLeagueId[player.league?.id ?? 0] ?? ''} ${player.fullName}</b>`,
+    );
+    return this.sendMessageWithPlayers(
+      ctx.from?.id ?? 0,
+      'your team is: \n',
+      playerList,
+    );
+  }
+
   onApplicationBootstrap(): void {
     console.log('🤖 Initializing Telegram bot...');
 
@@ -97,93 +193,14 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
         'for start tracking injuries, just send me player name. \n For check your team, use /myTeam command',
       );
     });
-    this.myTeamHandler = async (ctx: Context) => {
-      const user = ctx.from;
-      if (!user) {
-        return ctx.reply('you are not logged in, please start the bot first');
-      }
-      const userEntity = await this.userService.findUserWithPlayers(
-        user.id.toString(),
-      );
-      if (!userEntity) {
-        return ctx.reply('you are not logged in, please start the bot first');
-      }
-      const playerList = userEntity.players.map(
-        (player, index) =>
-          `<b>${index + 1}. ${FlagEmojiByLeagueId[player.league?.id ?? 0] ?? ''} ${player.fullName}</b>`,
-      );
-      return this.sendMessageWithPlayers(ctx, 'your team is: \n', playerList);
-    };
-    this.bot.command('myTeam', this.myTeamHandler);
 
-    this.messageHandler = async (ctx: Context) => {
-      try {
-        const text = ctx.text as string;
-        let playersNames: string[] = [];
-        if (text.startsWith('delete')) {
-          return await this.deletePlayerHandler(ctx);
-        }
-        if (text.startsWith('https://mantrafootball.org/teams')) {
-          void ctx.reply('please wait, your team is being processed...');
-          const team = await this.mantraService.getMantraTeam(text);
-          playersNames = team;
-        } else if (text.startsWith('https://')) {
-          return ctx.reply(
-            'this url is not supported, please, send a valid url like: https://mantrafootball.org/teams/{your team id}',
-          );
-        } else {
-          playersNames = text.split('\n');
-        }
-        const notFoundPlayers: string[] = [];
-        const foundedPlayers: Player[] = [];
-        for (const playerName of playersNames) {
-          const player =
-            await this.playersService.findPlayerInDBorFotmob(playerName);
-          if (!player) {
-            notFoundPlayers.push(playerName);
-            continue;
-          }
+    this.bot.command('myTeam', (ctx: Context) => {
+      return this.myTeamHandler(ctx);
+    });
 
-          if (!ctx.from?.is_bot) {
-            const name: string = ctx?.from?.username ?? '';
-            const telegramId: string = ctx?.from?.id.toString() ?? '';
-
-            const user = await this.userService.findOrCreateUser(
-              name,
-              telegramId,
-            );
-
-            const savedPlayer = await this.playersService.savePlayer(
-              user,
-              player,
-            );
-            if (savedPlayer) {
-              foundedPlayers.push(savedPlayer);
-            }
-          }
-        }
-
-        if (foundedPlayers.length === 0) {
-          return ctx.reply('no players found');
-        }
-
-        this.logger.log(foundedPlayers);
-
-        const playerList = foundedPlayers.map(
-          (player) =>
-            `<b>${player.fullName}</b> from ${FlagEmojiByLeagueId[player.league?.id ?? 0] ?? ''} ${player.teamName}`,
-        );
-        return this.sendMessageWithPlayers(
-          ctx,
-          'thanks, i will start tracking injuries for: \n',
-          playerList,
-        );
-      } catch (error) {
-        this.logger.error((error as Error).message);
-        return ctx.reply(`sorry, something went wrong, please try again later`);
-      }
-    };
-    this.bot.on('message', this.messageHandler);
+    this.bot.on('message', (ctx: Context) => {
+      return this.messageHandler(ctx);
+    });
 
     // Don't await - bot.launch() is a long-running process that polls for updates
     // Awaiting it would block the application startup
@@ -193,7 +210,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   async sendMessageWithPlayers(
-    ctx: Context,
+    userId: number,
     message: string,
     playersArray?: string[],
   ) {
@@ -207,11 +224,11 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     }
     for (const chunk of playersChunks) {
       const msg = message + chunk.join('\n');
-      await ctx.reply(msg, { parse_mode: 'HTML' });
+      await this.bot.telegram.sendMessage(userId, msg, { parse_mode: 'HTML' });
     }
     if (playersChunks.length === 0) {
       const msg = message + (playersArray?.join('\n') ?? '');
-      await ctx.reply(msg, { parse_mode: 'HTML' });
+      await this.bot.telegram.sendMessage(userId, msg, { parse_mode: 'HTML' });
     }
   }
 
