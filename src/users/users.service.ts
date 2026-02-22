@@ -77,4 +77,37 @@ export class UsersService {
     };
     return this.userRepository.save(updateUser);
   }
+
+  async deleteAllPlayersForUser(userId: string) {
+    const userEntity = await this.userRepository.findOne({
+      where: { telegramId: userId },
+      relations: ['players'],
+    });
+    if (!userEntity) {
+      throw new Error('User not found');
+    }
+    userEntity.players = [];
+    return this.userRepository.save(userEntity);
+  }
+
+  async deletePlayersForUserByLeagueId(userId: string, leagueId: number) {
+    const userEntity = await this.userRepository.findOne({
+      where: { telegramId: userId },
+      relations: ['players', 'players.league'],
+    });
+    if (!userEntity) {
+      throw new Error('User not found');
+    }
+    const updatedPlayers = userEntity.players.filter(
+      (player) => player.league.id !== leagueId,
+    );
+    if (updatedPlayers.length === userEntity.players.length) {
+      throw new Error(`No players found for league ${leagueId}`);
+    }
+    const updateUser = {
+      ...userEntity,
+      players: updatedPlayers,
+    };
+    return this.userRepository.save(updateUser);
+  }
 }

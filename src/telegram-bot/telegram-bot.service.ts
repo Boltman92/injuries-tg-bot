@@ -21,7 +21,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(BotService.name);
   private messageHandler: (ctx: Context) => Promise<Message.TextMessage | void>;
   private myTeamHandler: (ctx: Context) => Promise<Message.TextMessage | void>;
-  private deletePlayerHandler: (ctx: Context) => Promise<Message.TextMessage>;
+  //private deletePlayerHandler: (ctx: Context) => Promise<Message.TextMessage>;
   private playersPerMessage = 100;
   constructor(
     private configService: ConfigService,
@@ -36,6 +36,51 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     }
 
     this.bot = new Telegraf<Context>(token);
+  }
+
+  async deletePlayerHandler(ctx: Context): Promise<Message.TextMessage> {
+    try {
+      const text = ctx.text?.trim() ?? '';
+      if (!text) {
+        return ctx.reply('please provide player name');
+      }
+      if (text.startsWith('delete all')) {
+        if (!ctx.from?.id) {
+          return ctx.reply('you are not logged in, please start the bot first');
+        }
+        await this.userService.deleteAllPlayersForUser(ctx.from.id.toString());
+        return ctx.reply('all players deleted');
+      }
+      if (text.startsWith('delete league')) {
+        const leagueId = text.split(' ')[2];
+        console.log('leagueId', leagueId);
+        if (!ctx.from?.id) {
+          return ctx.reply('you are not logged in, please start the bot first');
+        }
+        if (!leagueId || isNaN(Number(leagueId))) {
+          return ctx.reply('please provide league id');
+        }
+        await this.userService.deletePlayersForUserByLeagueId(
+          ctx.from.id.toString(),
+          Number(leagueId),
+        );
+        return ctx.reply(`players deleted for league ${leagueId}`);
+      }
+      const playerName = text.split(' ').slice(1).join(' ');
+
+      if (!ctx.from?.id) {
+        return ctx.reply('you are not logged in, please start the bot first');
+      }
+
+      await this.userService.deletePlayerForUser(
+        ctx.from.id.toString(),
+        playerName,
+      );
+      return ctx.reply(`player ${playerName} deleted`);
+    } catch (error) {
+      this.logger.error((error as Error).message);
+      return ctx.reply(`${(error as Error).message}`);
+    }
   }
 
   onApplicationBootstrap(): void {
@@ -71,35 +116,12 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     };
     this.bot.command('myTeam', this.myTeamHandler);
 
-    this.deletePlayerHandler = async (ctx: Context) => {
-      try {
-        const text = ctx.text?.trim() ?? '';
-        if (!text) {
-          return ctx.reply('please provide player name');
-        }
-        const playerName = text.split(' ').slice(1).join(' ');
-
-        if (!ctx.from?.id) {
-          return ctx.reply('you are not logged in, please start the bot first');
-        }
-
-        await this.userService.deletePlayerForUser(
-          ctx.from.id.toString(),
-          playerName,
-        );
-        return ctx.reply(`player ${playerName} deleted`);
-      } catch (error) {
-        this.logger.error((error as Error).message);
-        return ctx.reply(`${(error as Error).message}`);
-      }
-    };
-
     this.messageHandler = async (ctx: Context) => {
       try {
         const text = ctx.text as string;
         let playersNames: string[] = [];
         if (text.startsWith('delete')) {
-          return this.deletePlayerHandler(ctx);
+          return await this.deletePlayerHandler(ctx);
         }
         if (text.startsWith('https://mantrafootball.org/teams')) {
           void ctx.reply('please wait, your team is being processed...');
