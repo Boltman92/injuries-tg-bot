@@ -263,6 +263,7 @@ export class PlayersService {
       });
       if (fixtures.length === 0) {
         this.logger.log('no fixtures to update injuries for');
+        this.isInjuryEpdate = false;
         return;
       }
     }
@@ -308,7 +309,7 @@ export class PlayersService {
           error,
         );
       }
-      await this.sleep(1000 * 10);
+      await this.sleep(1000 * 3);
     }
 
     this.logger.log(

@@ -102,6 +102,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
           return this.deletePlayerHandler(ctx);
         }
         if (text.startsWith('https://mantrafootball.org/teams')) {
+          void ctx.reply('please wait, your team is being processed...');
           const team = await this.mantraService.getMantraTeam(text);
           playersNames = team;
         } else if (text.startsWith('https://')) {
