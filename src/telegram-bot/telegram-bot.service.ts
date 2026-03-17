@@ -242,17 +242,21 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
         `Notifying all users by league id: ${fixture.league.id}, users: ${usersWithPlayersByLeagueId.length}`,
       );
       for (const user of usersWithPlayersByLeagueId) {
-        const playerList = user.players
-          .map(
-            (player) =>
-              `<b>${player.fullName}</b> - ${player.injuryStatus} - ${player.expectedReturn}`,
-          )
-          .join('\n');
-        await this.bot.telegram.sendMessage(
-          user.telegramId,
-          `🟥 Players of ${fixture.league.name} are injured: \n${playerList}`,
-          { parse_mode: 'HTML' },
-        );
+        try {
+          const playerList = user.players
+            .map(
+              (player) =>
+                `<b>${player.fullName}</b> - ${player.injuryStatus} - ${player.expectedReturn}`,
+            )
+            .join('\n');
+          await this.bot.telegram.sendMessage(
+            user.telegramId,
+            `🟥 Players of ${fixture.league.name} are injured: \n${playerList}`,
+            { parse_mode: 'HTML' },
+          );
+        } catch (error) {
+          this.logger.error(`Error notifying user: ${user.telegramId}`, error);
+        }
       }
     } catch (error) {
       this.logger.error(
